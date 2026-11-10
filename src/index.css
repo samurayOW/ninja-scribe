@@ -1,0 +1,3 @@
+* { box-sizing: border-box; }
+html { min-width: 320px; min-height: 100%; }
+::selection { color: #fff; background: #6d4aff; }
