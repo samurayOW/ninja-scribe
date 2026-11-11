@@ -13,7 +13,7 @@ export function useNinjaScribe(userId: string) {
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState('')
 
-  useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(store)) }, [storageKey, store])
+  useEffect(() => { localStorage.setItem(storageKey, JSON.stringify({ notes: store.notes })) }, [storageKey, store.notes])
   useEffect(() => {
     if (!toast) return
     const timer = window.setTimeout(() => setToast(''), 2600)
@@ -45,12 +45,29 @@ export function useNinjaScribe(userId: string) {
     setActiveNote(null)
     setToast('Нотатку видалено')
   }
-  function addFolder(name: string) {
-    const folder: Folder = { id: crypto.randomUUID(), name, color: ['violet', 'blue', 'mint'][store.folders.length % 3] }
-    setStore(current => ({ ...current, folders: [...current.folders, folder] }))
-    setActiveFolder(folder.id)
-    setActiveNote(null)
-    setToast('Папку створено')
+  function removeNotesInFolder(folderId: string) {
+    setStore(current => ({ ...current, notes: current.notes.filter(note => note.folderId !== folderId) }))
+    if (selectedNote?.folderId === folderId) setActiveNote(null)
+  }
+  function syncFolders(folders: Folder[]) {
+    setStore(current => {
+      const byId = new Map(folders.map(folder => [folder.id, folder]))
+      const byName = new Map(folders.map(folder => [folder.name.trim().toLocaleLowerCase(), folder]))
+      const folderIds = new Map(current.folders.map(folder => [
+        folder.id,
+        byId.get(folder.id) ?? byName.get(folder.name.trim().toLocaleLowerCase()),
+      ]))
+      const migratedNotes = current.notes.map(note => {
+        const folder = folderIds.get(note.folderId)
+        return folder && folder.id !== note.folderId ? { ...note, folderId: folder.id } : note
+      })
+      const sameFolders = current.folders.length === folders.length && current.folders.every((folder, index) =>
+        folder.id === folders[index]?.id && folder.name === folders[index]?.name && folder.color === folders[index]?.color,
+      )
+      const sameNotes = current.notes.every((note, index) => note.folderId === migratedNotes[index]?.folderId)
+      if (sameFolders && sameNotes) return current
+      return { folders, notes: migratedNotes }
+    })
   }
   function resetDemo() {
     setStore(initialStore)
@@ -61,5 +78,5 @@ export function useNinjaScribe(userId: string) {
     setToast('Демонстраційні дані відновлено')
   }
 
-  return { store, activeFolder, setActiveFolder, activeNote, setActiveNote, query, setQuery, toast, setToast, filteredNotes, selectedNote, createNote, saveNote, deleteNote, addFolder, resetDemo }
+  return { store, activeFolder, setActiveFolder, activeNote, setActiveNote, query, setQuery, toast, setToast, filteredNotes, selectedNote, createNote, saveNote, deleteNote, removeNotesInFolder, syncFolders, resetDemo }
 }

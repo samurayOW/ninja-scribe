@@ -25,7 +25,13 @@ export const initialStore: Store = {
 export function readStore(storageKey = 'ninja-scribe-data'): Store {
   try {
     const raw = localStorage.getItem(storageKey)
-    if (raw) return JSON.parse(raw) as Store
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<Store>
+      return {
+        folders: Array.isArray(parsed.folders) ? parsed.folders : initialStore.folders,
+        notes: Array.isArray(parsed.notes) ? parsed.notes : initialStore.notes,
+      }
+    }
   } catch { /* Keep starter data if stored data is unavailable. */ }
   return initialStore
 }
