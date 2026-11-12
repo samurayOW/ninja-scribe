@@ -4,8 +4,9 @@ import { useNinjaScribe } from '../hooks/useNinjaScribe'
 import { useUserFolders } from '../hooks/useUserFolders'
 import { getAuthErrorMessage, logout } from '../shared/auth'
 import { analyzeNote, createUserNote, deleteUserNote, getUserNotes, updateUserNote, type NoteLanguage } from '../shared/notes'
-import type { Folder } from '../types'
+import type { Folder, Note } from '../types'
 import { DeleteFolderDialog } from './DeleteFolderDialog'
+import { DeleteNoteDialog } from './DeleteNoteDialog'
 import { CreateNoteDialog } from './CreateNoteDialog'
 import { FolderDialog } from './FolderDialog'
 import { NoteWorkspace } from './NoteWorkspace'
@@ -16,12 +17,16 @@ export function Dashboard({ user }: { user: User }) {
   const notes = useNinjaScribe(user.uid)
   const cloudFolders = useUserFolders(user.uid, notes.store.folders)
   const [editing, setEditing] = useState(false)
+  const [editingSummary, setEditingSummary] = useState(false)
   const [showCreateNote, setShowCreateNote] = useState(false)
   const [showFolderDialog, setShowFolderDialog] = useState(false)
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null)
   const [deletingFolder, setDeletingFolder] = useState<Folder | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [deletingNote, setDeletingNote] = useState<Note | null>(null)
+  const [deleteNoteError, setDeleteNoteError] = useState('')
+  const [deleteNoteBusy, setDeleteNoteBusy] = useState(false)
   const [cloudNoteIds, setCloudNoteIds] = useState<Set<string>>(() => new Set())
   const [analyzingNote, setAnalyzingNote] = useState(false)
   const folder = cloudFolders.folders.find(item => item.id === notes.activeFolder)
@@ -62,35 +67,76 @@ export function Dashboard({ user }: { user: User }) {
     }
   }
 
-  function saveNote(note: Parameters<typeof notes.saveNote>[0]) {
+  function saveNote(note: Note) {
     void (async () => {
       try {
         if (cloudNoteIds.has(note.id)) await updateUserNote(user.uid, note)
         notes.saveNote(note)
         setEditing(false)
+        setEditingSummary(false)
       } catch (error) {
         notes.setToast(getAuthErrorMessage(error))
       }
     })()
   }
 
-  function removeSelectedNote() {
+  function requestDeleteNote() {
     const selected = notes.selectedNote
     if (!selected) return
-    void (async () => {
-      try {
-        if (cloudNoteIds.has(selected.id)) await deleteUserNote(selected.id)
-        notes.deleteNote()
-        setCloudNoteIds(current => {
-          const next = new Set(current)
-          next.delete(selected.id)
-          return next
-        })
-        setEditing(false)
-      } catch (error) {
-        notes.setToast(getAuthErrorMessage(error))
-      }
-    })()
+    setDeleteNoteError('')
+    setDeletingNote(selected)
+  }
+
+  async function confirmDeleteNote() {
+    if (!deletingNote) return
+    setDeleteNoteBusy(true)
+    setDeleteNoteError('')
+    try {
+      if (cloudNoteIds.has(deletingNote.id)) await deleteUserNote(deletingNote.id)
+      notes.deleteNote(deletingNote.id)
+      setCloudNoteIds(current => {
+        const next = new Set(current)
+        next.delete(deletingNote.id)
+        return next
+      })
+      setDeletingNote(null)
+      setEditing(false)
+      setEditingSummary(false)
+    } catch (error) {
+      setDeleteNoteError(getAuthErrorMessage(error))
+    } finally {
+      setDeleteNoteBusy(false)
+    }
+  }
+
+  function cancelNoteEditing() {
+    setEditing(false)
+    setEditingSummary(false)
+  }
+
+  function editNote() {
+    setEditing(true)
+    setEditingSummary(false)
+  }
+
+  function editNoteSummary() {
+    setEditing(false)
+    setEditingSummary(true)
+  }
+
+  function selectNote(noteId: string) {
+    notes.setActiveNote(noteId)
+    cancelNoteEditing()
+  }
+
+  function selectFolder(folderId: string) {
+    notes.setActiveFolder(folderId)
+    notes.setActiveNote(null)
+    cancelNoteEditing()
+  }
+
+  function saveEditedSummary(note: Note) {
+    saveNote(note)
   }
 
   async function reanalyzeSelectedNote() {
@@ -199,7 +245,7 @@ export function Dashboard({ user }: { user: User }) {
       query={notes.query}
       userName={displayName}
       userEmail={user.email ?? ''}
-      onFolderSelect={id => { notes.setActiveFolder(id); notes.setActiveNote(null); setEditing(false) }}
+      onFolderSelect={selectFolder}
       onQueryChange={notes.setQuery}
       onCreateNote={createNote}
       onAddFolder={() => setShowFolderDialog(true)}
@@ -207,11 +253,12 @@ export function Dashboard({ user }: { user: User }) {
       onDeleteFolder={targetFolder => { setDeletingFolder(targetFolder); setDeleteError('') }}
       onSignOut={() => { void signOutUser() }}
     />
-    <NotesList folder={folder} notes={notes.filteredNotes} activeNote={notes.activeNote} onSelect={id => { notes.setActiveNote(id); setEditing(false) }} onCreate={createNote}/>
-    <NoteWorkspace note={notes.selectedNote} folders={cloudFolders.folders} isEditing={editing} isAnalyzing={analyzingNote} onEdit={() => setEditing(true)} onCancel={() => setEditing(false)} onSave={saveNote} onDelete={removeSelectedNote} onAnalyze={() => { void reanalyzeSelectedNote() }} onCreate={createNote}/>
+    <NotesList folder={folder} notes={notes.filteredNotes} activeNote={notes.activeNote} onSelect={selectNote} onCreate={createNote}/>
+    <NoteWorkspace note={notes.selectedNote} folders={cloudFolders.folders} isEditing={editing} isEditingSummary={editingSummary} isAnalyzing={analyzingNote} onEdit={editNote} onEditSummary={editNoteSummary} onCancel={cancelNoteEditing} onSave={saveNote} onSaveSummary={saveEditedSummary} onDelete={requestDeleteNote} onAnalyze={() => { void reanalyzeSelectedNote() }} onCreate={createNote}/>
     {showFolderDialog && <FolderDialog onClose={() => setShowFolderDialog(false)} onSave={name => { void createFolder(name) }}/>}
     {editingFolder && <FolderDialog key={editingFolder.id} folder={editingFolder} onClose={() => setEditingFolder(null)} onSave={name => { void renameFolder(editingFolder.id, name) }}/>}
     {deletingFolder && <DeleteFolderDialog folder={deletingFolder} busy={deleting} error={deleteError} onClose={() => setDeletingFolder(null)} onConfirm={confirmDeleteFolder}/>}
+    {deletingNote && <DeleteNoteDialog note={deletingNote} busy={deleteNoteBusy} error={deleteNoteError} onClose={() => setDeletingNote(null)} onConfirm={confirmDeleteNote}/>}
     {showCreateNote && <CreateNoteDialog folders={cloudFolders.folders} initialFolderId={folder?.id ?? cloudFolders.folders[0]?.id ?? ''} onClose={() => setShowCreateNote(false)} onCreate={createNoteInCloud}/>}
     {(cloudFolders.error || notes.toast) && <div className="toast" role={cloudFolders.error ? 'alert' : 'status'}>{cloudFolders.error || notes.toast}</div>}
   </div>

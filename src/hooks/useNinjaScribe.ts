@@ -94,13 +94,12 @@ export function useNinjaScribe(userId: string) {
       return same ? current : { ...current, notes: merged };
     });
   }
-  function deleteNote() {
-    if (!selectedNote) return;
+  function deleteNote(noteId: string) {
     setStore((current) => ({
       ...current,
-      notes: current.notes.filter((note) => note.id !== selectedNote.id),
+      notes: current.notes.filter((note) => note.id !== noteId),
     }));
-    setActiveNote(null);
+    if (activeNote === noteId) setActiveNote(null);
     setToast("Нотатку видалено");
   }
   function removeNotesInFolder(folderId: string) {
