@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import i18n from '../i18n'
 import type { Folder } from '../types'
 
 export function useUserFolders(userId: string, localFolders: Folder[]) {
@@ -14,7 +15,7 @@ export function useUserFolders(userId: string, localFolders: Folder[]) {
       const { getUserFolders } = await import('../shared/folders')
       setFolders(await getUserFolders(userId, localFoldersAtStartup.current))
     } catch {
-      setError('Не вдалося завантажити папки. Перевірте підключення Firebase та опубліковані Firestore rules.')
+      setError(i18n.t('folders.loadError'))
     } finally {
       setLoading(false)
     }

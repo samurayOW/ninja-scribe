@@ -7,9 +7,10 @@ import {
   type User,
 } from 'firebase/auth'
 import { auth } from './firebase'
+import i18n from '../i18n'
 
 function getAuthInstance() {
-  if (!auth) throw new Error('Firebase ще не налаштовано. Додайте параметри Firebase у файл .env.')
+  if (!auth) throw new Error(i18n.t('errors.firebaseNotConfigured'))
   return auth
 }
 
@@ -54,20 +55,20 @@ export async function resetPassword(email: string): Promise<void> {
 export function getAuthErrorMessage(error: unknown): string {
   const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
   switch (code) {
-    case 'auth/email-already-in-use': return 'Для цієї електронної пошти вже створено акаунт.'
-    case 'auth/invalid-email': return 'Перевірте формат електронної пошти.'
-    case 'auth/weak-password': return 'Пароль надто простий. Використайте щонайменше 8 символів.'
+    case 'auth/email-already-in-use': return i18n.t('errors.authEmailInUse')
+    case 'auth/invalid-email': return i18n.t('errors.authInvalidEmail')
+    case 'auth/weak-password': return i18n.t('errors.authWeakPassword')
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
-    case 'auth/user-not-found': return 'Неправильна електронна пошта або пароль.'
-    case 'auth/too-many-requests': return 'Забагато спроб. Спробуйте пізніше.'
-    case 'auth/network-request-failed': return 'Не вдалося з’єднатися. Перевірте інтернет і спробуйте ще раз.'
-    case 'auth/operation-not-allowed': return 'У Firebase Console не ввімкнено вхід через Email/Password.'
-    case 'auth/user-disabled': return 'Цей акаунт вимкнено. Зверніться до адміністратора.'
-    case 'permission-denied': return 'Firestore відхилив запит. Опублікуйте правила з файлу firestore.rules у Firebase Console.'
-    case 'unavailable': return 'Firebase тимчасово недоступний. Спробуйте ще раз.'
+    case 'auth/user-not-found': return i18n.t('errors.authInvalidCredentials')
+    case 'auth/too-many-requests': return i18n.t('errors.authTooMany')
+    case 'auth/network-request-failed': return i18n.t('errors.authNetwork')
+    case 'auth/operation-not-allowed': return i18n.t('errors.authProviderDisabled')
+    case 'auth/user-disabled': return i18n.t('errors.authDisabled')
+    case 'permission-denied': return i18n.t('errors.permissionDenied')
+    case 'unavailable': return i18n.t('errors.unavailable')
     default:
-      if (error instanceof Error && error.message.startsWith('Firebase ще не налаштовано')) return error.message
-      return 'Не вдалося виконати запит. Спробуйте ще раз.'
+      if (error instanceof Error && error.message && !('code' in error)) return error.message
+      return i18n.t('errors.request')
   }
 }

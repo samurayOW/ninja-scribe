@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Note } from "../types";
 import { Icon } from "./Icon";
 
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function DeleteNoteDialog({ busy, error, onClose, onConfirm }: Props) {
+  const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
 
   async function confirm() {
@@ -38,20 +40,20 @@ export function DeleteNoteDialog({ busy, error, onClose, onConfirm }: Props) {
       >
         <header>
           <div>
-            <b id="delete-note-title">Видалити нотатку?</b>
-            <p>Цю дію не можна скасувати.</p>
+            <b id="delete-note-title">{t("deleteNote.title")}</b>
+            <p>{t("deleteNote.irreversible")}</p>
           </div>
           <button
             type="button"
             className="modal-close"
-            aria-label="Закрити"
+            aria-label={t("common.close")}
             onClick={onClose}
             disabled={busy}
           >
             <Icon name="close" />
           </button>
         </header>
-        <p id="delete-note-description">Нотатку буде видалено.</p>
+        <p id="delete-note-description">{t("deleteNote.description")}</p>
         {error && (
           <div className="folder-error" role="alert">
             {error}
@@ -59,7 +61,7 @@ export function DeleteNoteDialog({ busy, error, onClose, onConfirm }: Props) {
         )}
         <footer>
           <button type="button" onClick={onClose} disabled={busy}>
-            Скасувати
+            {t("common.cancel")}
           </button>
           <button
             className="danger-button"
@@ -67,7 +69,7 @@ export function DeleteNoteDialog({ busy, error, onClose, onConfirm }: Props) {
             disabled={busy}
             onClick={() => void confirm()}
           >
-            {busy || confirming ? "Видаляємо…" : "Видалити нотатку"}
+            {busy || confirming ? t("common.deleting") : t("sidebar.delete")}
           </button>
         </footer>
       </section>

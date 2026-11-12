@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { initialStore, readStore } from "../data";
+import i18n from "../i18n";
 import type { Folder, Note, Store } from "../types";
 
 export function useNinjaScribe(userId: string) {
@@ -48,7 +49,7 @@ export function useNinjaScribe(userId: string) {
       title: "",
       content: "",
       folderId,
-      updatedAt: "Щойно",
+      updatedAt: i18n.t("common.justNow"),
     };
     setStore((current) => ({ ...current, notes: [note, ...current.notes] }));
     setActiveNote(note.id);
@@ -63,7 +64,7 @@ export function useNinjaScribe(userId: string) {
     }));
     setActiveFolder(note.folderId);
     setActiveNote(note.id);
-    setToast("Нотатку збережено");
+    setToast(i18n.t("toasts.noteSaved"));
   }
   function syncNotes(remoteNotes: Note[]) {
     setStore((current) => {
@@ -100,7 +101,7 @@ export function useNinjaScribe(userId: string) {
       notes: current.notes.filter((note) => note.id !== noteId),
     }));
     if (activeNote === noteId) setActiveNote(null);
-    setToast("Нотатку видалено");
+    setToast(i18n.t("toasts.noteDeleted"));
   }
   function removeNotesInFolder(folderId: string) {
     setStore((current) => ({
@@ -152,7 +153,7 @@ export function useNinjaScribe(userId: string) {
     setActiveNote("meeting-2026-05-12");
     setQuery("");
     localStorage.removeItem(storageKey);
-    setToast("Демонстраційні дані відновлено");
+    setToast(i18n.t("toasts.demoRestored"));
   }
 
   return {

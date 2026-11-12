@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import {
   getAuthErrorMessage,
   loginWithEmail,
@@ -10,6 +11,7 @@ import { isFirebaseConfigured } from "../shared/firebase";
 type Props = { mode: "login" | "register"; onNavigate: (path: string) => void };
 
 export function AuthScreen({ mode, onNavigate }: Props) {
+  const { t } = useTranslation();
   const registering = mode === "register";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -25,20 +27,20 @@ export function AuthScreen({ mode, onNavigate }: Props) {
     setError("");
     setNotice("");
     if (registering && !name.trim()) {
-      setError("Вкажіть ім’я.");
+      setError(t("auth.nameRequired"));
       return;
     }
     if (registering && password !== confirmPassword) {
-      setError("Паролі не збігаються.");
+      setError(t("auth.passwordMismatch"));
       return;
     }
     if (registering && password.length < 8) {
-      setError("Пароль має містити щонайменше 8 символів.");
+      setError(t("auth.passwordTooShort"));
       return;
     }
     if (registering && !acceptedTerms) {
       setError(
-        "Потрібно прийняти умови використання та політику конфіденційності.",
+        t("auth.termsRequired"),
       );
       return;
     }
@@ -58,14 +60,14 @@ export function AuthScreen({ mode, onNavigate }: Props) {
     setError("");
     setNotice("");
     if (!email.trim()) {
-      setError("Спочатку введіть електронну пошту.");
+      setError(t("auth.emailRequired"));
       return;
     }
     setBusy(true);
     try {
       await resetPassword(email.trim());
       setNotice(
-        "Якщо для цієї адреси є акаунт, Firebase надішле лист для зміни пароля.",
+        t("auth.resetNotice"),
       );
     } catch (cause) {
       setError(getAuthErrorMessage(cause));
@@ -88,19 +90,18 @@ export function AuthScreen({ mode, onNavigate }: Props) {
           >
             <span>◆</span> NinjaScribe
           </a>
-          <h1>{registering ? "Створення акаунту" : "З поверненням"}</h1>
+          <h1>{registering ? t("auth.registerTitle") : t("auth.loginTitle")}</h1>
           <p>
             {registering
-              ? "Кілька кроків — і ви готові до роботи"
-              : "Увійдіть, щоб продовжити роботу з нотатками"}
+              ? t("auth.registerSubtitle")
+              : t("auth.loginSubtitle")}
           </p>
         </header>
         {!isFirebaseConfigured && (
           <div className="config-notice" role="status">
-            <b>Потрібне налаштування Firebase</b>
+            <b>{t("auth.firebaseSetup")}</b>
             <span>
-              Скопіюйте .env.example у .env, додайте конфігурацію вебзастосунку
-              з Firebase Console й перезапустіть сервер.
+              {t("auth.firebaseSetupDetails")}
             </span>
           </div>
         )}
@@ -117,12 +118,12 @@ export function AuthScreen({ mode, onNavigate }: Props) {
         <form className="auth-form" onSubmit={submit}>
           {registering && (
             <div className="auth-field">
-              <label htmlFor="displayName">Ім’я</label>
+              <label htmlFor="displayName">{t("auth.name")}</label>
               <input
                 id="displayName"
                 name="displayName"
                 type="text"
-                placeholder="Едуард Михайлов"
+                placeholder={t("auth.namePlaceholder")}
                 autoComplete="name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -132,7 +133,7 @@ export function AuthScreen({ mode, onNavigate }: Props) {
             </div>
           )}
           <div className="auth-field">
-            <label htmlFor="email">Електронна пошта</label>
+            <label htmlFor="email">{t("auth.email")}</label>
             <input
               id="email"
               name="email"
@@ -146,7 +147,7 @@ export function AuthScreen({ mode, onNavigate }: Props) {
           </div>
           <div className="auth-field">
             <div className="field-heading">
-              <label htmlFor="password">Пароль</label>
+              <label htmlFor="password">{t("auth.password")}</label>
               {!registering && (
                 <button
                   type="button"
@@ -154,7 +155,7 @@ export function AuthScreen({ mode, onNavigate }: Props) {
                   onClick={handleResetPassword}
                   disabled={busy}
                 >
-                  Забули пароль?
+                  {t("auth.forgotPassword")}
                 </button>
               )}
             </div>
@@ -163,7 +164,7 @@ export function AuthScreen({ mode, onNavigate }: Props) {
               name="password"
               type="password"
               placeholder={
-                registering ? "Мінімум 8 символів" : "Введіть пароль"
+                registering ? t("auth.passwordMinimum") : t("auth.passwordPlaceholder")
               }
               autoComplete={registering ? "new-password" : "current-password"}
               minLength={registering ? 8 : undefined}
@@ -171,16 +172,16 @@ export function AuthScreen({ mode, onNavigate }: Props) {
               onChange={(event) => setPassword(event.target.value)}
               required
             />
-            {registering && <small>Мінімум 8 символів</small>}
+            {registering && <small>{t("auth.passwordMinimum")}</small>}
           </div>
           {registering && (
             <div className="auth-field">
-              <label htmlFor="passwordConfirm">Підтвердження пароля</label>
+              <label htmlFor="passwordConfirm">{t("auth.confirmPassword")}</label>
               <input
                 id="passwordConfirm"
                 name="passwordConfirm"
                 type="password"
-                placeholder="Повторіть пароль"
+                placeholder={t("auth.confirmPlaceholder")}
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
@@ -196,32 +197,32 @@ export function AuthScreen({ mode, onNavigate }: Props) {
                 onChange={(event) => setAcceptedTerms(event.target.checked)}
               />
               <span>
-                Я приймаю{" "}
+                {t("auth.termsLead")} {" "}
                 <a href="#terms" onClick={(event) => event.preventDefault()}>
-                  умови використання
+                  {t("auth.terms")}
                 </a>{" "}
-                та{" "}
+                {t("auth.and")} {" "}
                 <a href="#privacy" onClick={(event) => event.preventDefault()}>
-                  політику конфіденційності
+                  {t("auth.privacy")}
                 </a>
               </span>
             </label>
           )}
           <button className="auth-submit" type="submit" disabled={busy}>
-            {busy ? "Зачекайте…" : registering ? "Створити акаунт" : "Увійти"}
+            {busy ? t("auth.wait") : registering ? t("auth.createAccount") : t("auth.signIn")}
           </button>
           <p className="auth-switch">
-            {registering ? "Вже маєте акаунт?" : "Ще не маєте акаунту?"}{" "}
+            {registering ? t("auth.hasAccount") : t("auth.noAccount")}{" "}
             <button
               type="button"
               onClick={() => onNavigate(registering ? "/login" : "/register")}
             >
-              {registering ? "Увійти" : "Зареєструватися"}
+              {registering ? t("auth.signIn") : t("auth.register")}
             </button>
           </p>
         </form>
       </section>
-      <p className="auth-footnote">Ваші нотатки — тільки для вас.</p>
+      <p className="auth-footnote">{t("auth.footnote")}</p>
     </main>
   );
 }

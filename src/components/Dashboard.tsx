@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { User } from 'firebase/auth'
 import { useNinjaScribe } from '../hooks/useNinjaScribe'
 import { useUserFolders } from '../hooks/useUserFolders'
@@ -14,6 +15,7 @@ import { NotesList } from './NotesList'
 import { Sidebar } from './Sidebar'
 
 export function Dashboard({ user }: { user: User }) {
+  const { t, i18n } = useTranslation()
   const notes = useNinjaScribe(user.uid)
   const cloudFolders = useUserFolders(user.uid, notes.store.folders)
   const [editing, setEditing] = useState(false)
@@ -37,11 +39,11 @@ export function Dashboard({ user }: { user: User }) {
     ])),
     [cloudFolders.folders, notes.store.notes],
   )
-  const displayName = user.displayName?.trim() || user.email?.split('@')[0] || 'Користувач'
+  const displayName = user.displayName?.trim() || user.email?.split('@')[0] || user.email || ''
 
   function createNote() {
     if (cloudFolders.folders.length === 0) {
-      notes.setToast('Спочатку створіть папку для нотаток.')
+      notes.setToast(t('toasts.foldersRequired'))
       return
     }
     setShowCreateNote(true)
@@ -60,7 +62,7 @@ export function Dashboard({ user }: { user: User }) {
       setCloudNoteIds(current => new Set(current).add(note.id))
       notes.setActiveFolder(note.folderId)
       setShowCreateNote(false)
-      notes.setToast('Нотатку проаналізовано та збережено у Firestore')
+      notes.setToast(t('toasts.noteCreated'))
     } catch (error) {
       if (error instanceof Error && !('code' in error)) throw error
       throw new Error(getAuthErrorMessage(error))
@@ -145,10 +147,10 @@ export function Dashboard({ user }: { user: User }) {
     setAnalyzingNote(true)
     try {
       const analysis = await analyzeNote(selected.content, 'uk', selected.title)
-      const updatedNote = { ...selected, ...analysis, updatedAt: 'Щойно' }
+      const updatedNote = { ...selected, ...analysis, updatedAt: t('common.justNow') }
       if (cloudNoteIds.has(selected.id)) await updateUserNote(user.uid, updatedNote)
       notes.saveNote(updatedNote)
-      notes.setToast('AI-підсумок оновлено українською')
+      notes.setToast(t('toasts.analysisUpdated'))
     } catch (error) {
       notes.setToast(error instanceof Error && !('code' in error) ? error.message : getAuthErrorMessage(error))
     } finally {
@@ -162,7 +164,7 @@ export function Dashboard({ user }: { user: User }) {
       notes.setActiveFolder(newFolder.id)
       notes.setActiveNote(null)
       setShowFolderDialog(false)
-      notes.setToast('Папку створено')
+      notes.setToast(t('folders.created'))
     } catch (error) {
       notes.setToast(getAuthErrorMessage(error))
     }
@@ -172,7 +174,7 @@ export function Dashboard({ user }: { user: User }) {
     try {
       await cloudFolders.rename(folderId, name)
       setEditingFolder(null)
-      notes.setToast('Назву папки оновлено')
+      notes.setToast(t('folders.renamed'))
     } catch (error) {
       notes.setToast(getAuthErrorMessage(error))
     }
@@ -181,7 +183,7 @@ export function Dashboard({ user }: { user: User }) {
   async function confirmDeleteFolder() {
     if (!deletingFolder) return
     if (cloudFolders.folders.length <= 1) {
-      setDeleteError('Спочатку створіть іншу папку, щоб видалити останню.')
+      setDeleteError(t('folders.needAnother'))
       return
     }
     setDeleting(true)
@@ -194,7 +196,7 @@ export function Dashboard({ user }: { user: User }) {
         notes.setActiveFolder(nextFolder?.id ?? 'all')
       }
       setDeletingFolder(null)
-      notes.setToast('Папку та її нотатки видалено')
+      notes.setToast(t('folders.deleted'))
     } catch (error) {
       setDeleteError(getAuthErrorMessage(error))
     } finally {
@@ -226,7 +228,7 @@ export function Dashboard({ user }: { user: User }) {
       })
       .catch(error => { if (!cancelled) notes.setToast(getAuthErrorMessage(error)) })
     return () => { cancelled = true }
-  }, [user.uid])
+  }, [user.uid, i18n.resolvedLanguage])
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
