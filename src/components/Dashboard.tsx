@@ -3,8 +3,10 @@ import type { User } from 'firebase/auth'
 import { useNinjaScribe } from '../hooks/useNinjaScribe'
 import { useUserFolders } from '../hooks/useUserFolders'
 import { getAuthErrorMessage, logout } from '../shared/auth'
+import { analyzeNote, createUserNote, deleteUserNote, getUserNotes, updateUserNote, type NoteLanguage } from '../shared/notes'
 import type { Folder } from '../types'
 import { DeleteFolderDialog } from './DeleteFolderDialog'
+import { CreateNoteDialog } from './CreateNoteDialog'
 import { FolderDialog } from './FolderDialog'
 import { NoteWorkspace } from './NoteWorkspace'
 import { NotesList } from './NotesList'
@@ -14,11 +16,14 @@ export function Dashboard({ user }: { user: User }) {
   const notes = useNinjaScribe(user.uid)
   const cloudFolders = useUserFolders(user.uid, notes.store.folders)
   const [editing, setEditing] = useState(false)
+  const [showCreateNote, setShowCreateNote] = useState(false)
   const [showFolderDialog, setShowFolderDialog] = useState(false)
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null)
   const [deletingFolder, setDeletingFolder] = useState<Folder | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [cloudNoteIds, setCloudNoteIds] = useState<Set<string>>(() => new Set())
+  const [analyzingNote, setAnalyzingNote] = useState(false)
   const folder = cloudFolders.folders.find(item => item.id === notes.activeFolder)
   const noteCounts = useMemo(
     () => Object.fromEntries(cloudFolders.folders.map(item => [
@@ -34,13 +39,75 @@ export function Dashboard({ user }: { user: User }) {
       notes.setToast('Спочатку створіть папку для нотаток.')
       return
     }
-    notes.createNote()
-    setEditing(true)
+    setShowCreateNote(true)
+  }
+
+  async function createNoteInCloud(draft: { title: string; content: string; folderId: string; language: NoteLanguage }) {
+    try {
+      const analysis = await analyzeNote(draft.content, draft.language, draft.title)
+      const note = await createUserNote(user.uid, {
+        title: draft.title,
+        content: draft.content,
+        folderId: draft.folderId,
+        ...analysis,
+      })
+      notes.saveNote(note)
+      setCloudNoteIds(current => new Set(current).add(note.id))
+      notes.setActiveFolder(note.folderId)
+      setShowCreateNote(false)
+      notes.setToast('Нотатку проаналізовано та збережено у Firestore')
+    } catch (error) {
+      if (error instanceof Error && !('code' in error)) throw error
+      throw new Error(getAuthErrorMessage(error))
+    }
   }
 
   function saveNote(note: Parameters<typeof notes.saveNote>[0]) {
-    notes.saveNote(note)
-    setEditing(false)
+    void (async () => {
+      try {
+        if (cloudNoteIds.has(note.id)) await updateUserNote(user.uid, note)
+        notes.saveNote(note)
+        setEditing(false)
+      } catch (error) {
+        notes.setToast(getAuthErrorMessage(error))
+      }
+    })()
+  }
+
+  function removeSelectedNote() {
+    const selected = notes.selectedNote
+    if (!selected) return
+    void (async () => {
+      try {
+        if (cloudNoteIds.has(selected.id)) await deleteUserNote(selected.id)
+        notes.deleteNote()
+        setCloudNoteIds(current => {
+          const next = new Set(current)
+          next.delete(selected.id)
+          return next
+        })
+        setEditing(false)
+      } catch (error) {
+        notes.setToast(getAuthErrorMessage(error))
+      }
+    })()
+  }
+
+  async function reanalyzeSelectedNote() {
+    const selected = notes.selectedNote
+    if (!selected || analyzingNote) return
+    setAnalyzingNote(true)
+    try {
+      const analysis = await analyzeNote(selected.content, 'uk', selected.title)
+      const updatedNote = { ...selected, ...analysis, updatedAt: 'Щойно' }
+      if (cloudNoteIds.has(selected.id)) await updateUserNote(user.uid, updatedNote)
+      notes.saveNote(updatedNote)
+      notes.setToast('AI-підсумок оновлено українською')
+    } catch (error) {
+      notes.setToast(error instanceof Error && !('code' in error) ? error.message : getAuthErrorMessage(error))
+    } finally {
+      setAnalyzingNote(false)
+    }
   }
 
   async function createFolder(name: string) {
@@ -104,6 +171,18 @@ export function Dashboard({ user }: { user: User }) {
   }, [cloudFolders.folders, cloudFolders.loading])
 
   useEffect(() => {
+    let cancelled = false
+    void getUserNotes(user.uid)
+      .then(remoteNotes => {
+        if (cancelled) return
+        setCloudNoteIds(new Set(remoteNotes.map(note => note.id)))
+        notes.syncNotes(remoteNotes)
+      })
+      .catch(error => { if (!cancelled) notes.setToast(getAuthErrorMessage(error)) })
+    return () => { cancelled = true }
+  }, [user.uid])
+
+  useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'n') { event.preventDefault(); createNote() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); document.querySelector<HTMLInputElement>('.side-search input')?.focus() }
@@ -129,10 +208,11 @@ export function Dashboard({ user }: { user: User }) {
       onSignOut={() => { void signOutUser() }}
     />
     <NotesList folder={folder} notes={notes.filteredNotes} activeNote={notes.activeNote} onSelect={id => { notes.setActiveNote(id); setEditing(false) }} onCreate={createNote}/>
-    <NoteWorkspace note={notes.selectedNote} folders={cloudFolders.folders} isEditing={editing} onEdit={() => setEditing(true)} onCancel={() => setEditing(false)} onSave={saveNote} onDelete={() => { notes.deleteNote(); setEditing(false) }} onAnalyze={() => notes.setToast('AI-підсумки з’являться після налаштування Firebase AI Logic')} onCreate={createNote}/>
+    <NoteWorkspace note={notes.selectedNote} folders={cloudFolders.folders} isEditing={editing} isAnalyzing={analyzingNote} onEdit={() => setEditing(true)} onCancel={() => setEditing(false)} onSave={saveNote} onDelete={removeSelectedNote} onAnalyze={() => { void reanalyzeSelectedNote() }} onCreate={createNote}/>
     {showFolderDialog && <FolderDialog onClose={() => setShowFolderDialog(false)} onSave={name => { void createFolder(name) }}/>}
     {editingFolder && <FolderDialog key={editingFolder.id} folder={editingFolder} onClose={() => setEditingFolder(null)} onSave={name => { void renameFolder(editingFolder.id, name) }}/>}
     {deletingFolder && <DeleteFolderDialog folder={deletingFolder} busy={deleting} error={deleteError} onClose={() => setDeletingFolder(null)} onConfirm={confirmDeleteFolder}/>}
+    {showCreateNote && <CreateNoteDialog folders={cloudFolders.folders} initialFolderId={folder?.id ?? cloudFolders.folders[0]?.id ?? ''} onClose={() => setShowCreateNote(false)} onCreate={createNoteInCloud}/>}
     {(cloudFolders.error || notes.toast) && <div className="toast" role={cloudFolders.error ? 'alert' : 'status'}>{cloudFolders.error || notes.toast}</div>}
   </div>
 }
